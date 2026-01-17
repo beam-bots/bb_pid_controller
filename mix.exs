@@ -6,7 +6,7 @@ defmodule BB.PID.Controller.MixProject do
   use Mix.Project
 
   @moduledoc """
-  Behaviour trees for Beam Bots robots using Reactor.
+  PID controller for Beam Bots.
   """
 
   @version "0.2.0"
@@ -68,8 +68,7 @@ defmodule BB.PID.Controller.MixProject do
   defp deps do
     [
       {:bb, bb_dep("~> 0.13")},
-      {:reactor, "~> 0.17"},
-      {:spark, "~> 2.3"},
+      {:pid_control, "~> 0.1"},
 
       # dev/test
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
