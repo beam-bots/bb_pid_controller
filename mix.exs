@@ -28,7 +28,11 @@ defmodule BB.PID.Controller.MixProject do
     ]
   end
 
-  defp dialyzer, do: []
+  defp dialyzer do
+    [
+      plt_add_apps: [:mix]
+    ]
+  end
 
   defp package do
     [
@@ -67,7 +71,7 @@ defmodule BB.PID.Controller.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:bb, bb_dep("~> 0.13")},
+      {:bb, bb_dep("~> 0.15.3")},
       {:pid_control, "~> 0.1"},
 
       # dev/test
