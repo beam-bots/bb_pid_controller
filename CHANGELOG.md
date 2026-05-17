@@ -11,6 +11,11 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.2](https://github.com/beam-bots/bb_pid_controller/compare/v0.2.1...v0.2.2) (2026-05-17)
+
+
+
+
 ## [v0.2.1](https://github.com/beam-bots/bb_pid_controller/compare/v0.2.0...v0.2.1) (2026-05-13)
 
 
