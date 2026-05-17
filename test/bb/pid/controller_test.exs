@@ -242,8 +242,7 @@ defmodule BB.PID.ControllerTest do
                {:failed_to_start_child, BB.TopologySupervisor,
                 {:shutdown,
                  {:failed_to_start_child, BB.ControllerSupervisor,
-                  {:shutdown,
-                   {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
+                  {:shutdown, {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
                DuplicateSourceRobot.start_link([])
 
       assert msg =~ "setpoint and measurement must have different"
@@ -285,8 +284,7 @@ defmodule BB.PID.ControllerTest do
                {:failed_to_start_child, BB.TopologySupervisor,
                 {:shutdown,
                  {:failed_to_start_child, BB.ControllerSupervisor,
-                  {:shutdown,
-                   {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
+                  {:shutdown, {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
                EmptySetpointPathRobot.start_link([])
 
       assert msg =~ "setpoint_path cannot be empty"
@@ -328,8 +326,7 @@ defmodule BB.PID.ControllerTest do
                {:failed_to_start_child, BB.TopologySupervisor,
                 {:shutdown,
                  {:failed_to_start_child, BB.ControllerSupervisor,
-                  {:shutdown,
-                   {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
+                  {:shutdown, {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
                EmptyMeasurementPathRobot.start_link([])
 
       assert msg =~ "measurement_path cannot be empty"
@@ -371,8 +368,7 @@ defmodule BB.PID.ControllerTest do
                {:failed_to_start_child, BB.TopologySupervisor,
                 {:shutdown,
                  {:failed_to_start_child, BB.ControllerSupervisor,
-                  {:shutdown,
-                   {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
+                  {:shutdown, {:failed_to_start_child, :bad_pid, {:invalid_config, msg}}}}}}}} =
                BadOutputFieldRobot.start_link([])
 
       assert msg =~ "output_field :nonexistent not found"
