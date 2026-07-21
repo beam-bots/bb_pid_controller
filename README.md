@@ -41,7 +41,7 @@ end
 
 ## Requirements
 
-- BB framework (`~> 0.13`)
+- BB framework (`~> 0.16`)
 
 ## Usage
 
