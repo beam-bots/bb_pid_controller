@@ -33,7 +33,7 @@ Add `bb_pid_controller` to your dependencies:
 ```elixir
 def deps do
   [
-    {:bb, "~> 0.13"},
+    {:bb, "~> 0.16"},
     {:bb_pid_controller, "~> 0.2"}
   ]
 end
