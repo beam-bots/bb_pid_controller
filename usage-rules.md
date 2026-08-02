@@ -22,9 +22,15 @@ the controller.
    does *not* touch actuators, joints, or the topology directly — everything is
    PubSub. One controller instance is exactly one PID loop; declare several for
    several loops.
-3. **It runs its own tick loop at `rate` Hz** (`Process.send_after/3` +
-   `handle_info(:tick, …)`). Each tick it publishes only once *both* a setpoint
-   and a measurement have arrived; until then it stays quiet.
+3. **It runs its own tick loop at `rate` Hz**, via `BB.Loop`. Each tick it
+   publishes only once *both* a setpoint and a measurement have arrived; until
+   then it stays quiet. The loop schedules against an absolute deadline and
+   drops whole missed periods rather than firing catch-up ticks, and reports
+   its achieved interval and skipped-period count on `[:bb, :loop, :tick]`.
+4. **The integral and derivative terms use the measured elapsed time** between
+   steps, not the nominal `rate`. Gains are therefore per-second: `ki` is
+   integral gain per second of accumulated error, `kd` is derivative gain per
+   second of error change.
 
 ## Wiring it in
 
@@ -62,7 +68,7 @@ wired to tunable parameters and the topic paths left as `[:TODO]` to fill in.
 | `setpoint_topic` / `setpoint_message` / `setpoint_path` | required | Where the target comes from, the message type to match, and the path to the value in its payload |
 | `measurement_topic` / `measurement_message` / `measurement_path` | required | Same three for the feedback signal |
 | `output_topic` / `output_message` / `output_field` / `output_frame_id` | required | Topic to publish to, message type to build, numeric field for the output, and its `frame_id` |
-| `rate` | `100` | Loop frequency in Hz (tick interval is `div(1000, rate)` ms) |
+| `rate` | `100` | Loop frequency in Hz. The loop self-corrects for drift; watch `:skipped` on `[:bb, :loop, :tick]` to see whether the machine is actually keeping up |
 
 A `*_path` is a list of atoms (field names) and integers (list indices):
 `[:position]`, `[:positions, 0]`, `[:data, :readings, 0, :value]`.

@@ -131,19 +131,9 @@ defmodule BB.PID.Controller do
          :ok <- validate_output_field(opts) do
       bb = Keyword.fetch!(opts, :bb)
 
-      pid =
-        PIDControl.new(
-          kp: Keyword.fetch!(opts, :kp),
-          ki: Keyword.get(opts, :ki, 0.0),
-          kd: Keyword.get(opts, :kd, 0.0),
-          tau: Keyword.get(opts, :tau, 1.0),
-          output_min: Keyword.get(opts, :output_min, -1.0),
-          output_max: Keyword.get(opts, :output_max, 1.0)
-        )
-
       state = %{
         bb: bb,
-        pid: pid,
+        pid: new_pid(opts),
         setpoint: nil,
         measurement: nil,
         setpoint_topic: opts[:setpoint_topic],
@@ -156,15 +146,13 @@ defmodule BB.PID.Controller do
         output_message: opts[:output_message],
         output_field: opts[:output_field],
         output_frame_id: opts[:output_frame_id],
-        rate: opts[:rate],
-        tick_ref: nil
+        loop: BB.Loop.new(bb, clock: {:rate, opts[:rate]})
       }
 
       BB.PubSub.subscribe(bb.robot, state.setpoint_topic)
       BB.PubSub.subscribe(bb.robot, state.measurement_topic)
 
-      tick_ref = schedule_tick(state.rate)
-      {:ok, %{state | tick_ref: tick_ref}}
+      {:ok, %{state | loop: BB.Loop.arm(state.loop)}}
     end
   end
 
@@ -185,18 +173,8 @@ defmodule BB.PID.Controller do
   end
 
   def handle_info(:tick, state) do
-    state =
-      if state.setpoint != nil and state.measurement != nil do
-        pid = PIDControl.step(state.pid, state.setpoint, state.measurement)
-        message = build_output_message(pid.output, state)
-        BB.PubSub.publish(state.bb.robot, state.output_topic, message)
-        %{state | pid: pid}
-      else
-        state
-      end
-
-    tick_ref = schedule_tick(state.rate)
-    {:noreply, %{state | tick_ref: tick_ref}}
+    {_dt, _skipped, loop} = BB.Loop.tick(state.loop)
+    {:noreply, step(%{state | loop: loop})}
   end
 
   def handle_info(_msg, state) do
@@ -205,23 +183,36 @@ defmodule BB.PID.Controller do
 
   @impl BB.Controller
   def handle_options(new_opts, state) do
-    pid =
-      PIDControl.new(
-        kp: Keyword.fetch!(new_opts, :kp),
-        ki: Keyword.get(new_opts, :ki, 0.0),
-        kd: Keyword.get(new_opts, :kd, 0.0),
-        tau: Keyword.get(new_opts, :tau, 1.0),
-        output_min: Keyword.get(new_opts, :output_min, -1.0),
-        output_max: Keyword.get(new_opts, :output_max, 1.0)
-      )
-
-    {:ok, %{state | pid: pid}}
+    {:ok, %{state | pid: new_pid(new_opts)}}
   end
 
   @impl BB.Controller
   def terminate(_reason, state) do
-    if state.tick_ref, do: Process.cancel_timer(state.tick_ref)
+    BB.Loop.cancel(state.loop)
     :ok
+  end
+
+  defp new_pid(opts) do
+    PIDControl.new(
+      kp: Keyword.fetch!(opts, :kp),
+      ki: Keyword.get(opts, :ki, 0.0),
+      kd: Keyword.get(opts, :kd, 0.0),
+      tau: Keyword.get(opts, :tau, 1.0),
+      output_min: Keyword.get(opts, :output_min, -1.0),
+      output_max: Keyword.get(opts, :output_max, 1.0),
+      # Derive the integral and derivative terms from the time actually elapsed
+      # between steps rather than assuming the nominal interval was met.
+      use_system_t: true
+    )
+  end
+
+  defp step(%{setpoint: nil} = state), do: state
+  defp step(%{measurement: nil} = state), do: state
+
+  defp step(state) do
+    pid = PIDControl.step(state.pid, state.setpoint, state.measurement)
+    BB.PubSub.publish(state.bb.robot, state.output_topic, build_output_message(pid.output, state))
+    %{state | pid: pid}
   end
 
   defp validate_unique_sources(opts) do
@@ -297,10 +288,5 @@ defmodule BB.PID.Controller do
     BB.Message.new!(state.output_message, state.output_frame_id, [
       {state.output_field, output_value}
     ])
-  end
-
-  defp schedule_tick(rate) do
-    interval_ms = div(1000, rate)
-    Process.send_after(self(), :tick, interval_ms)
   end
 end
