@@ -19,12 +19,11 @@ defmodule Mix.Tasks.BbPidController.InstallTest do
       project_with_robot()
       |> Igniter.compose_task("bb_pid_controller.install")
       |> assert_has_patch("lib/test/robot.ex", """
-      + |    controller(
-      + |      :pid,
-      + |      {BB.PID.Controller,
-      + |       kp: param([:config, :pid, :kp]),
-      + |       ki: param([:config, :pid, :ki]),
-      + |       kd: param([:config, :pid, :kd]),
+      + |    controller :pid,
+      + |               {BB.PID.Controller,
+      + |                kp: param([:config, :pid, :kp]),
+      + |                ki: param([:config, :pid, :ki]),
+      + |                kd: param([:config, :pid, :kd]),
       """)
     end
 
@@ -40,8 +39,7 @@ defmodule Mix.Tasks.BbPidController.InstallTest do
       project_with_robot()
       |> Igniter.compose_task("bb_pid_controller.install", ["--name", "shoulder_pid"])
       |> assert_has_patch("lib/test/robot.ex", """
-      + |    controller(
-      + |      :shoulder_pid,
+      + |    controller :shoulder_pid,
       """)
     end
   end
@@ -53,7 +51,7 @@ defmodule Mix.Tasks.BbPidController.InstallTest do
       |> assert_has_patch("lib/test/robot.ex", """
       + |    group :config do
       + |      group :pid do
-      + |        param(:kp, type: :float, default: 1.0, doc: "Proportional gain")
+      + |        param :kp, type: :float, default: 1.0, doc: "Proportional gain"
       """)
     end
 
