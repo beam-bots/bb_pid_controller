@@ -18,8 +18,8 @@ defmodule BB.PID.Controller do
                                  ┌─────────────────┐
   Measurement Topic ────────────►│ BB.PID.Controller│
   (configurable message/field)   │                  │
-                                 │   PIDControl     │
-                                 │   .step()        │
+                                 │  BB.PID.Kernel   │
+                                 │  (Nx defn)       │
                                  └────────┬─────────┘
                                           │
                                           ▼
@@ -66,6 +66,8 @@ defmodule BB.PID.Controller do
       measurement_path: [:positions, 0]   # extracts payload.positions |> Enum.at(0)
       path: [:data, :readings, 0, :value] # extracts payload.data.readings[0].value
   """
+
+  alias BB.PID.Kernel
 
   use BB.Controller,
     options_schema: [
@@ -133,7 +135,7 @@ defmodule BB.PID.Controller do
 
       state = %{
         bb: bb,
-        pid: new_pid(opts),
+        pid: Kernel.new(gains(opts)),
         setpoint: nil,
         measurement: nil,
         setpoint_topic: opts[:setpoint_topic],
@@ -173,8 +175,10 @@ defmodule BB.PID.Controller do
   end
 
   def handle_info(:tick, state) do
-    {_dt, _skipped, loop} = BB.Loop.tick(state.loop)
-    {:noreply, step(%{state | loop: loop})}
+    {dt, _skipped, loop} = BB.Loop.tick(state.loop)
+    state = %{state | loop: loop}
+
+    {:noreply, step(state, dt) || state}
   end
 
   def handle_info(_msg, state) do
@@ -183,7 +187,7 @@ defmodule BB.PID.Controller do
 
   @impl BB.Controller
   def handle_options(new_opts, state) do
-    {:ok, %{state | pid: new_pid(new_opts)}}
+    {:ok, %{state | pid: Kernel.put_gains(state.pid, gains(new_opts))}}
   end
 
   @impl BB.Controller
@@ -192,26 +196,23 @@ defmodule BB.PID.Controller do
     :ok
   end
 
-  defp new_pid(opts) do
-    PIDControl.new(
-      kp: Keyword.fetch!(opts, :kp),
-      ki: Keyword.get(opts, :ki, 0.0),
-      kd: Keyword.get(opts, :kd, 0.0),
-      tau: Keyword.get(opts, :tau, 1.0),
-      output_min: Keyword.get(opts, :output_min, -1.0),
-      output_max: Keyword.get(opts, :output_max, 1.0),
-      # Derive the integral and derivative terms from the time actually elapsed
-      # between steps rather than assuming the nominal interval was met.
-      use_system_t: true
-    )
+  defp gains(opts) do
+    Keyword.take(opts, [:kp, :ki, :kd, :tau, :output_min, :output_max])
   end
 
-  defp step(%{setpoint: nil} = state), do: state
-  defp step(%{measurement: nil} = state), do: state
+  defp step(_state, nil), do: nil
+  defp step(%{setpoint: nil}, _dt), do: nil
+  defp step(%{measurement: nil}, _dt), do: nil
 
-  defp step(state) do
-    pid = PIDControl.step(state.pid, state.setpoint, state.measurement)
-    BB.PubSub.publish(state.bb.robot, state.output_topic, build_output_message(pid.output, state))
+  defp step(state, dt) do
+    pid = Kernel.step(state.pid, state.setpoint, state.measurement, dt)
+
+    BB.PubSub.publish(
+      state.bb.robot,
+      state.output_topic,
+      build_output_message(Kernel.output(pid), state)
+    )
+
     %{state | pid: pid}
   end
 

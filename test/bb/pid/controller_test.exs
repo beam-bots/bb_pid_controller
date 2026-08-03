@@ -6,6 +6,7 @@ defmodule BB.PID.ControllerTest do
   use ExUnit.Case, async: true
 
   alias BB.PID.Controller
+  alias BB.PID.Kernel
   alias BB.Process, as: BBProcess
 
   defmodule TestRobot do
@@ -91,26 +92,16 @@ defmodule BB.PID.ControllerTest do
       assert state.loop.period_ns == 10_000_000
     end
 
-    test "the PID derives its time base from measured elapsed time" do
-      # Without this the integral and derivative terms are computed against a
-      # nominal timestep of 1.0 seconds regardless of the loop's real period,
-      # which scales the I term by the period and the D term by its inverse.
+    test "a retune applies the new gains without discarding the integrator" do
       assert {:ok, state} = Controller.init(controller_opts())
 
-      assert state.pid.config.use_system_t
-    end
+      wound = %{state | pid: Kernel.step(state.pid, 1.0, 0.0, 0.5)}
+      assert Nx.to_number(wound.pid.integral) > 0.0
 
-    test "a parameter change applies the new gains" do
-      assert {:ok, state} = Controller.init(controller_opts())
+      assert {:ok, retuned} = Controller.handle_options(controller_opts(kp: 5.0), wound)
 
-      assert {:ok, retuned} =
-               Controller.handle_options(
-                 controller_opts(kp: 5.0),
-                 state
-               )
-
-      assert retuned.pid.config.kp == 5.0
-      assert retuned.pid.config.use_system_t
+      assert Nx.to_number(retuned.pid.kp) == 5.0
+      assert Nx.to_number(retuned.pid.integral) == Nx.to_number(wound.pid.integral)
     end
   end
 
