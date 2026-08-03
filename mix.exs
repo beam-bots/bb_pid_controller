@@ -73,8 +73,8 @@ defmodule BB.PID.Controller.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:bb, bb_dep("~> 0.16")},
-      {:pid_control, "~> 0.1"},
+      {:bb, bb_dep("~> 0.26")},
+      {:nx, "~> 0.12"},
 
       # dev/test
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

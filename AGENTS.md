@@ -10,7 +10,7 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-BB PID Controller provides a general-purpose PID controller implementation for Beam Bots robots. It implements the `BB.Controller` behaviour and uses the `pid_control` hex package for the control algorithm.
+BB PID Controller provides a general-purpose PID controller implementation for Beam Bots robots. It implements the `BB.Controller` behaviour, and owns the control algorithm outright: `BB.PID.Kernel` is an `Nx.Defn` kernel written elementwise over its tensors, so it drives one loop or a whole batch. `BB.PID.Controller` is the single-loop case wired into the DSL.
 
 ## Architecture
 
@@ -21,8 +21,8 @@ Setpoint Topic ─────────────────────�
                                ┌─────────────────┐
 Measurement Topic ────────────►│ BB.PID.Controller│
 (configurable message/field)   │                  │
-                               │   PIDControl     │
-                               │   .step()        │
+                               │  BB.PID.Kernel   │
+                               │  (Nx defn)       │
                                └────────┬─────────┘
                                         │
                                         ▼
@@ -36,8 +36,10 @@ One controller instance = one PID loop. Instantiate multiple controllers for mul
 
 | File | Purpose |
 |------|---------|
-| `lib/bb/pid/controller.ex` | Main PID controller implementation |
-| `test/bb/pid/controller_test.exs` | Comprehensive test suite |
+| `lib/bb/pid/kernel.ex` | The control law, as a batch-shaped `Nx.Defn` kernel |
+| `lib/bb/pid/controller.ex` | `BB.Controller` wiring: topics, options, and the tick loop |
+| `test/bb/pid/kernel_test.exs` | Control-law tests (terms, anti-windup, batching) |
+| `test/bb/pid/controller_test.exs` | Controller wiring and message-plumbing tests |
 
 ## Configuration Options
 
@@ -134,7 +136,7 @@ mix format              # Format code
 ## Dependencies
 
 - `bb` - Beam Bots core framework
-- `pid_control` - PID control algorithm implementation
+- `nx` - tensors and `defn` for `BB.PID.Kernel`
 
 
 ## Licensing headers

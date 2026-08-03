@@ -18,8 +18,8 @@ defmodule BB.PID.Controller do
                                  ┌─────────────────┐
   Measurement Topic ────────────►│ BB.PID.Controller│
   (configurable message/field)   │                  │
-                                 │   PIDControl     │
-                                 │   .step()        │
+                                 │  BB.PID.Kernel   │
+                                 │  (Nx defn)       │
                                  └────────┬─────────┘
                                           │
                                           ▼
@@ -66,6 +66,8 @@ defmodule BB.PID.Controller do
       measurement_path: [:positions, 0]   # extracts payload.positions |> Enum.at(0)
       path: [:data, :readings, 0, :value] # extracts payload.data.readings[0].value
   """
+
+  alias BB.PID.Kernel
 
   use BB.Controller,
     options_schema: [
@@ -131,19 +133,9 @@ defmodule BB.PID.Controller do
          :ok <- validate_output_field(opts) do
       bb = Keyword.fetch!(opts, :bb)
 
-      pid =
-        PIDControl.new(
-          kp: Keyword.fetch!(opts, :kp),
-          ki: Keyword.get(opts, :ki, 0.0),
-          kd: Keyword.get(opts, :kd, 0.0),
-          tau: Keyword.get(opts, :tau, 1.0),
-          output_min: Keyword.get(opts, :output_min, -1.0),
-          output_max: Keyword.get(opts, :output_max, 1.0)
-        )
-
       state = %{
         bb: bb,
-        pid: pid,
+        pid: Kernel.new(gains(opts)),
         setpoint: nil,
         measurement: nil,
         setpoint_topic: opts[:setpoint_topic],
@@ -156,15 +148,13 @@ defmodule BB.PID.Controller do
         output_message: opts[:output_message],
         output_field: opts[:output_field],
         output_frame_id: opts[:output_frame_id],
-        rate: opts[:rate],
-        tick_ref: nil
+        loop: BB.Loop.new(bb, clock: {:rate, opts[:rate]})
       }
 
       BB.PubSub.subscribe(bb.robot, state.setpoint_topic)
       BB.PubSub.subscribe(bb.robot, state.measurement_topic)
 
-      tick_ref = schedule_tick(state.rate)
-      {:ok, %{state | tick_ref: tick_ref}}
+      {:ok, %{state | loop: BB.Loop.arm(state.loop)}}
     end
   end
 
@@ -185,18 +175,10 @@ defmodule BB.PID.Controller do
   end
 
   def handle_info(:tick, state) do
-    state =
-      if state.setpoint != nil and state.measurement != nil do
-        pid = PIDControl.step(state.pid, state.setpoint, state.measurement)
-        message = build_output_message(pid.output, state)
-        BB.PubSub.publish(state.bb.robot, state.output_topic, message)
-        %{state | pid: pid}
-      else
-        state
-      end
+    {dt, _skipped, loop} = BB.Loop.tick(state.loop)
+    state = %{state | loop: loop}
 
-    tick_ref = schedule_tick(state.rate)
-    {:noreply, %{state | tick_ref: tick_ref}}
+    {:noreply, step(state, dt) || state}
   end
 
   def handle_info(_msg, state) do
@@ -205,23 +187,33 @@ defmodule BB.PID.Controller do
 
   @impl BB.Controller
   def handle_options(new_opts, state) do
-    pid =
-      PIDControl.new(
-        kp: Keyword.fetch!(new_opts, :kp),
-        ki: Keyword.get(new_opts, :ki, 0.0),
-        kd: Keyword.get(new_opts, :kd, 0.0),
-        tau: Keyword.get(new_opts, :tau, 1.0),
-        output_min: Keyword.get(new_opts, :output_min, -1.0),
-        output_max: Keyword.get(new_opts, :output_max, 1.0)
-      )
-
-    {:ok, %{state | pid: pid}}
+    {:ok, %{state | pid: Kernel.put_gains(state.pid, gains(new_opts))}}
   end
 
   @impl BB.Controller
   def terminate(_reason, state) do
-    if state.tick_ref, do: Process.cancel_timer(state.tick_ref)
+    BB.Loop.cancel(state.loop)
     :ok
+  end
+
+  defp gains(opts) do
+    Keyword.take(opts, [:kp, :ki, :kd, :tau, :output_min, :output_max])
+  end
+
+  defp step(_state, nil), do: nil
+  defp step(%{setpoint: nil}, _dt), do: nil
+  defp step(%{measurement: nil}, _dt), do: nil
+
+  defp step(state, dt) do
+    pid = Kernel.step(state.pid, state.setpoint, state.measurement, dt)
+
+    BB.PubSub.publish(
+      state.bb.robot,
+      state.output_topic,
+      build_output_message(Kernel.output(pid), state)
+    )
+
+    %{state | pid: pid}
   end
 
   defp validate_unique_sources(opts) do
@@ -297,10 +289,5 @@ defmodule BB.PID.Controller do
     BB.Message.new!(state.output_message, state.output_frame_id, [
       {state.output_field, output_value}
     ])
-  end
-
-  defp schedule_tick(rate) do
-    interval_ms = div(1000, rate)
-    Process.send_after(self(), :tick, interval_ms)
   end
 end

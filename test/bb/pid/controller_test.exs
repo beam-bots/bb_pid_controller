@@ -5,6 +5,8 @@
 defmodule BB.PID.ControllerTest do
   use ExUnit.Case, async: true
 
+  alias BB.PID.Controller
+  alias BB.PID.Kernel
   alias BB.Process, as: BBProcess
 
   defmodule TestRobot do
@@ -40,6 +42,32 @@ defmodule BB.PID.ControllerTest do
     end
   end
 
+  defp controller_opts(extra \\ []) do
+    Keyword.merge(
+      [
+        bb: %{robot: TestRobot, path: [:test_pid]},
+        kp: 1.0,
+        ki: 0.1,
+        kd: 0.01,
+        tau: 1.0,
+        output_min: -10.0,
+        output_max: 10.0,
+        setpoint_topic: [:actuator, :base_link, :joint1, :pid],
+        setpoint_message: BB.Message.Actuator.Command.Position,
+        setpoint_path: [:position],
+        measurement_topic: [:sensor, :base_link, :joint1, :encoder],
+        measurement_message: BB.Message.Sensor.JointState,
+        measurement_path: [:positions, 0],
+        output_topic: [:actuator, :base_link, :joint1, :servo],
+        output_message: BB.Message.Actuator.Command.Velocity,
+        output_field: :velocity,
+        output_frame_id: :joint1,
+        rate: 100
+      ],
+      extra
+    )
+  end
+
   describe "controller starts and subscribes" do
     test "controller is started and registered" do
       start_supervised!(TestRobot)
@@ -47,6 +75,33 @@ defmodule BB.PID.ControllerTest do
       pid = BBProcess.whereis(TestRobot, :test_pid)
       assert is_pid(pid)
       assert Process.alive?(pid)
+    end
+  end
+
+  describe "loop timing" do
+    setup do
+      # init/1 subscribes, so the robot's registry has to be up.
+      start_supervised!(TestRobot)
+      :ok
+    end
+
+    test "the loop runs at the configured rate" do
+      assert {:ok, state} = Controller.init(controller_opts())
+
+      assert state.loop.clock == {:rate, 100.0}
+      assert state.loop.period_ns == 10_000_000
+    end
+
+    test "a retune applies the new gains without discarding the integrator" do
+      assert {:ok, state} = Controller.init(controller_opts())
+
+      wound = %{state | pid: Kernel.step(state.pid, 1.0, 0.0, 0.5)}
+      assert Nx.to_number(wound.pid.integral) > 0.0
+
+      assert {:ok, retuned} = Controller.handle_options(controller_opts(kp: 5.0), wound)
+
+      assert Nx.to_number(retuned.pid.kp) == 5.0
+      assert Nx.to_number(retuned.pid.integral) == Nx.to_number(wound.pid.integral)
     end
   end
 
