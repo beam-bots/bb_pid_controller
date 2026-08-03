@@ -11,6 +11,17 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.3.0](https://github.com/beam-bots/bb_pid_controller/compare/v0.2.2...v0.3.0) (2026-08-03)
+### Breaking Changes:
+
+* fix loop timing and own the control law as an Nx kernel (#75) by James Harton
+
+
+
+### Bug Fixes:
+
+* test: expect paren-less DSL from the installer (#73) by James Harton
+
 ## [v0.2.2](https://github.com/beam-bots/bb_pid_controller/compare/v0.2.1...v0.2.2) (2026-05-17)
 
 
