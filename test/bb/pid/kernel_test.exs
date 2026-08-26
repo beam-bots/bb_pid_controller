@@ -7,8 +7,33 @@ defmodule BB.PID.KernelTest do
 
   alias BB.PID.Kernel
 
+  @state [:integral, :prev_measurement, :derivative, :output, :primed]
+
   defp scalar(tensor), do: Nx.to_number(tensor)
   defp list(tensor), do: Nx.to_flat_list(tensor)
+
+  defp assert_agrees(scalar_kernel, tensor_kernel) do
+    assert Kernel.scalar_representation?(scalar_kernel)
+    refute Kernel.scalar_representation?(tensor_kernel)
+
+    for field <- @state do
+      assert_in_delta scalar(Map.fetch!(scalar_kernel, field)),
+                      scalar(Map.fetch!(tensor_kernel, field)),
+                      1.0e-12,
+                      "#{field} diverged between the scalar and tensor kernels"
+    end
+  end
+
+  defp drive(kernel, steps) do
+    Enum.reduce(steps, kernel, fn {setpoint, measurement, dt}, kernel ->
+      Kernel.step(kernel, setpoint, measurement, dt)
+    end)
+  end
+
+  # A tensor gain forces the tensor representation for otherwise identical gains.
+  defp pair(gains) do
+    {Kernel.new(gains), Kernel.new(Keyword.put(gains, :kp, Nx.tensor(gains[:kp], type: :f64)))}
+  end
 
   describe "new/1" do
     test "defaults every gain but kp" do
@@ -307,6 +332,111 @@ defmodule BB.PID.KernelTest do
       stepped = Kernel.step(retuned, 1.0, 0.0, 0.01)
 
       assert_in_delta scalar(stepped.output), 3.0, 1.0e-9
+    end
+  end
+
+  describe "the scalar and tensor representations agree" do
+    # The two write the same control law twice, once over floats and once over
+    # tensors. Everything here drives both with identical inputs and holds their
+    # whole state to each other, so a change to one that is not made to the
+    # other fails rather than silently changing the single-loop behaviour.
+
+    test "over a full PID with every term active" do
+      {s, t} = pair(kp: 2.0, ki: 0.5, kd: 0.1, tau: 0.8, output_min: -50.0, output_max: 50.0)
+
+      steps = [{1.0, 0.0, 0.01}, {1.0, 0.3, 0.01}, {1.0, 0.7, 0.01}, {0.0, 0.9, 0.02}]
+
+      assert_agrees(drive(s, steps), drive(t, steps))
+    end
+
+    test "through saturation and back-calculation anti-windup" do
+      {s, t} = pair(kp: 10.0, ki: 1.0, output_max: 1.0)
+
+      steps = List.duplicate({1.0, 0.0, 1.0}, 5) ++ List.duplicate({-1.0, 0.0, 1.0}, 5)
+
+      assert_agrees(drive(s, steps), drive(t, steps))
+    end
+
+    test "on the first step, where the derivative is held at zero" do
+      {s, t} = pair(kp: 0.0, kd: 1.0, output_min: -100.0, output_max: 100.0)
+
+      assert_agrees(drive(s, [{0.0, 5.0, 0.1}]), drive(t, [{0.0, 5.0, 0.1}]))
+    end
+
+    test "on a spuriously small dt, where both floor at @min_dt" do
+      {s, t} = pair(kp: 0.0, kd: 1.0, output_min: -100.0, output_max: 100.0)
+
+      steps = [{0.0, 0.0, 0.1}, {0.0, 1.0, 0.0}]
+
+      assert_agrees(drive(s, steps), drive(t, steps))
+    end
+
+    test "after a retune that keeps accumulated state" do
+      {s, t} = pair(kp: 0.0, ki: 1.0, output_max: 100.0)
+
+      retune = fn kernel ->
+        kernel
+        |> drive([{1.0, 0.25, 0.5}])
+        |> Kernel.put_gains(kp: 5.0, ki: 0.25)
+        |> drive([{1.0, 0.5, 0.5}])
+      end
+
+      assert_agrees(retune.(s), retune.(t))
+    end
+  end
+
+  describe "promotion between representations" do
+    test "new/1 gives the scalar representation for all-numeric gains" do
+      assert Kernel.scalar_representation?(Kernel.new(kp: 2.0, ki: 0.5))
+    end
+
+    test "new/1 gives the tensor representation for a tensor gain" do
+      refute Kernel.scalar_representation?(Kernel.new(kp: Nx.tensor(2.0)))
+    end
+
+    test "new/1 gives the tensor representation for a batch" do
+      refute Kernel.scalar_representation?(Kernel.new(kp: [1.0, 2.0]))
+    end
+
+    test "step/4 promotes a scalar kernel given a tensor argument" do
+      stepped = Kernel.step(Kernel.new(kp: 1.0), Nx.tensor(1.0, type: :f64), 0.0, 0.01)
+
+      refute Kernel.scalar_representation?(stepped)
+      assert_in_delta scalar(stepped.output), 1.0, 1.0e-9
+    end
+
+    test "step/4 promotes a scalar kernel given a batched argument" do
+      stepped = Kernel.step(Kernel.new(kp: 1.0), [1.0, 2.0], 0.0, 0.01)
+
+      refute Kernel.scalar_representation?(stepped)
+      assert list(stepped.output) == [1.0, 1.0]
+    end
+
+    test "put_gains/2 promotes a scalar kernel given a tensor gain" do
+      retuned = Kernel.put_gains(Kernel.new(kp: 1.0), kp: Nx.tensor(2.0, type: :f64))
+
+      refute Kernel.scalar_representation?(retuned)
+      assert scalar(retuned.kp) == 2.0
+    end
+
+    test "put_gains/2 cannot grow a single loop into a batch" do
+      # Not a limitation of the scalar representation - the tensor kernel has
+      # always refused this, because the accumulated state has no batch axis to
+      # broadcast the new gain against.
+      assert_raise ArgumentError, ~r/cannot broadcast/, fn ->
+        Kernel.put_gains(Kernel.new(kp: 1.0), kp: [2.0, 3.0])
+      end
+    end
+
+    test "to_tensors/1 preserves state and is idempotent" do
+      wound = Kernel.step(Kernel.new(kp: 1.0, ki: 1.0, output_max: 100.0), 1.0, 0.25, 0.5)
+      promoted = Kernel.to_tensors(wound)
+
+      refute Kernel.scalar_representation?(promoted)
+      assert Nx.type(promoted.integral) == {:f, 64}
+      assert scalar(promoted.integral) == scalar(wound.integral)
+      assert scalar(promoted.prev_measurement) == 0.25
+      assert Kernel.to_tensors(promoted) == promoted
     end
   end
 end

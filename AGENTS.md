@@ -10,7 +10,7 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-BB PID Controller provides a general-purpose PID controller implementation for Beam Bots robots. It implements the `BB.Controller` behaviour, and owns the control algorithm outright: `BB.PID.Kernel` is an `Nx.Defn` kernel written elementwise over its tensors, so it drives one loop or a whole batch. `BB.PID.Controller` is the single-loop case wired into the DSL.
+BB PID Controller provides a general-purpose PID controller implementation for Beam Bots robots. It implements the `BB.Controller` behaviour, and owns the control algorithm outright: `BB.PID.Kernel` writes the control law twice — once over BEAM floats for a single loop, once as an `Nx.Defn` kernel written elementwise over tensors for a batch — and picks between them by what it is handed. `BB.PID.Controller` is the single-loop case wired into the DSL.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Setpoint Topic ─────────────────────�
 Measurement Topic ────────────►│ BB.PID.Controller│
 (configurable message/field)   │                  │
                                │  BB.PID.Kernel   │
-                               │  (Nx defn)       │
+                               │  (scalar / defn) │
                                └────────┬─────────┘
                                         │
                                         ▼
@@ -36,7 +36,7 @@ One controller instance = one PID loop. Instantiate multiple controllers for mul
 
 | File | Purpose |
 |------|---------|
-| `lib/bb/pid/kernel.ex` | The control law, as a batch-shaped `Nx.Defn` kernel |
+| `lib/bb/pid/kernel.ex` | The control law, as scalar floats and as a batch-shaped `Nx.Defn` kernel |
 | `lib/bb/pid/controller.ex` | `BB.Controller` wiring: topics, options, and the tick loop |
 | `test/bb/pid/kernel_test.exs` | Control-law tests (terms, anti-windup, batching) |
 | `test/bb/pid/controller_test.exs` | Controller wiring and message-plumbing tests |
@@ -136,7 +136,7 @@ mix format              # Format code
 ## Dependencies
 
 - `bb` - Beam Bots core framework
-- `nx` - tensors and `defn` for `BB.PID.Kernel`
+- `nx` - tensors and `defn` for the batched path of `BB.PID.Kernel`
 
 
 ## Licensing headers
