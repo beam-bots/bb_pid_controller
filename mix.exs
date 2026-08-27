@@ -9,7 +9,7 @@ defmodule BB.PID.Controller.MixProject do
   PID controller for Beam Bots.
   """
 
-  @version "0.3.0"
+  @version "0.3.2"
 
   def project do
     [

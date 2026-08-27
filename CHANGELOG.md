@@ -11,6 +11,24 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.3.2](https://github.com/beam-bots/bb_pid_controller/compare/v0.3.1...v0.3.2) (2026-08-27)
+
+
+
+
+### Improvements:
+
+* give `BB.PID.Kernel` a scalar path for the single-loop case (#90) by James Harton
+
+## [v0.3.1](https://github.com/beam-bots/bb_pid_controller/compare/v0.3.0...v0.3.1) (2026-08-27)
+
+
+
+
+### Improvements:
+
+* give `BB.PID.Kernel` a scalar path for the single-loop case (#90) by James Harton
+
 ## [v0.3.0](https://github.com/beam-bots/bb_pid_controller/compare/v0.2.2...v0.3.0) (2026-08-03)
 ### Breaking Changes:
 

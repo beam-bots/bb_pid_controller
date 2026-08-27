@@ -34,7 +34,7 @@ Add `bb_pid_controller` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:bb_pid_controller, "~> 0.3.0"}
+    {:bb_pid_controller, "~> 0.3.2"}
   ]
 end
 ```
