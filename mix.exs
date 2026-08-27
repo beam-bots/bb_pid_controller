@@ -73,7 +73,7 @@ defmodule BB.PID.Controller.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:bb, bb_dep("~> 0.26")},
+      {:bb, bb_dep("~> 0.31")},
       {:nx, "~> 0.12"},
 
       # dev/test
