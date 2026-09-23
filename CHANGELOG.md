@@ -11,6 +11,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.3.3](https://github.com/beam-bots/bb_pid_controller/compare/v0.3.2...v0.3.3) (2026-09-23)
+
+
+
+
+### Improvements:
+
+* accept `nx` 1.0 alongside 0.12 (#106) by James Harton
+
 ## [v0.3.2](https://github.com/beam-bots/bb_pid_controller/compare/v0.3.1...v0.3.2) (2026-08-27)
 
 
