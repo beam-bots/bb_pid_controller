@@ -74,7 +74,7 @@ defmodule BB.PID.Controller.MixProject do
   defp deps do
     [
       {:bb, bb_dep("~> 0.31")},
-      {:nx, "~> 0.12"},
+      {:nx, "~> 0.12 or ~> 1.0"},
 
       # dev/test
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
