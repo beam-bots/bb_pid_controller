@@ -85,7 +85,6 @@ defmodule BB.PID.Controller.MixProject do
       {:git_ops, "~> 2.9", only: [:dev, :test], runtime: false},
       {:igniter, "~> 0.6", only: [:dev, :test], runtime: false},
       {:mimic, "~> 2.2", only: :test, runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:usage_rules, "~> 1.2", only: [:dev], runtime: false}
     ]
   end
