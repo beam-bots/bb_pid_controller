@@ -61,7 +61,8 @@ defmodule BB.PID.Controller.MixProject do
         ["README.md", "CHANGELOG.md"]
         |> Enum.concat(Path.wildcard("documentation/**/*.{md,livemd,cheatmd}")),
       groups_for_extras: [
-        Tutorials: ~r/tutorials\//
+        Tutorials: ~r/tutorials\//,
+        Explanation: ~r/topics\//
       ],
       source_ref: "main",
       source_url: "https://github.com/beam-bots/bb_pid_controller"
