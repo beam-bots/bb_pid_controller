@@ -68,6 +68,38 @@ defmodule BB.PID.ControllerTest do
     )
   end
 
+  # The loop's telemetry fires inside the controller just before `step/2`, and
+  # only on ticks with a `dt` - the ones that step. Syncing with the controller
+  # first means the event comes from a tick that saw the published inputs, and
+  # syncing again afterwards means that tick's step has finished.
+  defp refute_output_after_a_step do
+    controller = BBProcess.whereis(TestRobot, :test_pid)
+    :sys.get_state(controller)
+
+    handler_id = "pid-controller-test-#{System.unique_integer([:positive])}"
+    test_pid = self()
+
+    :telemetry.attach(
+      handler_id,
+      [:bb, :loop, :tick],
+      fn
+        _event, _measurements, %{robot: TestRobot, path: [:test_pid]}, _config ->
+          send(test_pid, :controller_ticked)
+
+        _event, _measurements, _metadata, _config ->
+          :ok
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    assert_receive :controller_ticked, 1_000
+    :sys.get_state(controller)
+
+    refute_received {:bb, [:actuator, :base_link, :joint1, :servo], _}
+  end
+
   describe "controller starts and subscribes" do
     test "controller is started and registered" do
       start_supervised!(TestRobot)
@@ -163,7 +195,7 @@ defmodule BB.PID.ControllerTest do
 
       BB.PubSub.publish(TestRobot, [:sensor, :base_link, :joint1, :encoder], measurement_msg)
 
-      refute_receive {:bb, [:actuator, :base_link, :joint1, :servo], _}, 50
+      refute_output_after_a_step()
     end
 
     test "controller does not publish when only setpoint is received" do
@@ -180,7 +212,7 @@ defmodule BB.PID.ControllerTest do
 
       BB.PubSub.publish(TestRobot, [:actuator, :base_link, :joint1, :pid], setpoint_msg)
 
-      refute_receive {:bb, [:actuator, :base_link, :joint1, :servo], _}, 50
+      refute_output_after_a_step()
     end
 
     test "controller does not publish when only measurement is received" do
@@ -198,7 +230,7 @@ defmodule BB.PID.ControllerTest do
 
       BB.PubSub.publish(TestRobot, [:sensor, :base_link, :joint1, :encoder], measurement_msg)
 
-      refute_receive {:bb, [:actuator, :base_link, :joint1, :servo], _}, 50
+      refute_output_after_a_step()
     end
   end
 
